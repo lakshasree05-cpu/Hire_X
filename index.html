@@ -545,8 +545,7 @@ a { text-decoration: none; color: inherit; }
 /* ===========================
    EMAILJS OTP INTEGRATION
    =========================== */
-
-// 🔴 EMAILJS CONFIG (REPLACE THESE)
+// 🔴 EMAILJS CONFIG (YOUR CREDENTIALS)
 const EMAILJS_CONFIG = {
     publicKey: "3iKKZU4CFNkC-fK4t",
     serviceID: "service_o6zj6zw",
@@ -572,11 +571,11 @@ let timerInterval;
 
 // INIT EMAILJS
 window.addEventListener("load", () => {
-    if (typeof emailjs !== "undefined") {
+    if (typeof emailjs !== "undefined" && emailjs) {
         emailjs.init(EMAILJS_CONFIG.publicKey);
-        console.log("EmailJS Ready");
+        console.log("✅ EmailJS Ready");
     } else {
-        console.log("EmailJS not loaded");
+        console.log("⚠️ EmailJS not loaded - using debug mode");
     }
 });
 
@@ -589,7 +588,15 @@ function generateOTP() {
 async function sendOTP() {
     const email = document.getElementById("otp-contact").value;
 
-    if (!email) return alert("Enter email");
+    if (!email) {
+        alert("Please enter your email address");
+        return;
+    }
+
+    if (!email.includes("@")) {
+        alert("Please enter a valid email");
+        return;
+    }
 
     const otp = generateOTP();
 
@@ -602,8 +609,11 @@ async function sendOTP() {
     };
 
     const btn = document.querySelector(".btn-primary");
-    btn.innerHTML = "SENDING...";
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ SENDING...";
     btn.disabled = true;
+
+    console.log("📧 Sending OTP to:", email);
 
     try {
         await emailjs.send(
@@ -612,21 +622,24 @@ async function sendOTP() {
             {
                 to_email: email,
                 to_name: email.split("@")[0],
-                otp_code: otp
+                otp: otp
             }
         );
 
-        alert("OTP sent successfully!");
+        alert("✅ OTP sent successfully! Check your email.");
+        console.log("✅ Email sent!");
 
     } catch (err) {
-        console.log(err);
-
-        // fallback debug (for testing)
-        document.getElementById("otp-debug").innerHTML =
-            `<b>TEST OTP:</b> ${otp}`;
+        console.error("❌ EmailJS Error:", err);
+        alert("EmailJS Error: " + (err.text || err.message));
+        
+        // Fallback for testing
+        document.getElementById("otp-debug").innerHTML = 
+            `<b style="color:var(--gold)">⚠️ DEBUG OTP:</b> ${otp}<br>` +
+            `<small style="color:var(--text-muted)">Email failed - use this OTP for testing</small>`;
     }
 
-    btn.innerHTML = "SEND OTP";
+    btn.innerHTML = originalText;
     btn.disabled = false;
 
     document.getElementById("otp-verify-section").style.display = "block";
@@ -642,17 +655,22 @@ function verifyOTP() {
         entered += document.getElementById("otp" + i).value;
     }
 
+    if (entered.length < 6) {
+        alert("Please enter all 6 digits");
+        return;
+    }
+
     if (Date.now() > otpData.expires) {
-        alert("OTP expired");
+        alert("OTP has expired. Please request a new one.");
         return;
     }
 
     if (entered === otpData.code) {
-        alert("OTP Verified Successfully!");
+        alert("✅ OTP Verified Successfully!");
         otpData.verified = true;
 
         setTimeout(() => {
-            console.log("Redirect or next step");
+            showPage("resume");
         }, 1000);
 
     } else {
@@ -660,10 +678,10 @@ function verifyOTP() {
 
         const remaining = OTP_CONFIG.maxAttempts - otpData.attempts;
 
-        alert("Wrong OTP. Attempts left: " + remaining);
+        alert("❌ Wrong OTP! Attempts left: " + remaining);
 
         if (remaining <= 0) {
-            alert("Too many attempts. Request new OTP");
+            alert("Too many attempts. Please request a new OTP.");
         }
 
         clearInputs();
@@ -684,7 +702,7 @@ function startTimer() {
         if (time <= 0) {
             clearInterval(timerInterval);
             otpData.code = null;
-            alert("OTP expired");
+            alert("OTP expired. Please request a new one.");
         }
     }, 1000);
 }
@@ -699,6 +717,7 @@ function clearInputs() {
     for (let i = 0; i < 6; i++) {
         document.getElementById("otp" + i).value = "";
     }
+    document.getElementById("otp0").focus();
 }
 
 // OTP INPUT HANDLING
