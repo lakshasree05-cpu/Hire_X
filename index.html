@@ -541,55 +541,179 @@ a { text-decoration: none; color: inherit; }
 /* ============================================================
    PAGE 4: OTP
    ============================================================ */
-.otp-grid { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; padding-top: 80px; }
-@media (max-width: 768px) { .otp-grid { grid-template-columns: 1fr; } }
-.otp-left {
-  background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(180,77,255,0.05));
-  border-right: 1px solid var(--glass-border);
-  padding: 60px 50px;
-  display: flex; flex-direction: column; justify-content: center;
-  position: relative; z-index: 1;
-}
-.otp-right { padding: 60px 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 1; }
-.trust-item { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 32px; }
-.trust-icon {
-  width: 48px; height: 48px; flex-shrink: 0;
-  background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(180,77,255,0.15));
-  border-radius: 12px; display: flex; align-items: center; justify-content: center;
-  font-size: 1.3rem;
-}
-.trust-text h4 { font-family: var(--font-display); font-size: 0.75rem; letter-spacing: 2px; color: var(--blue-neon); margin-bottom: 4px; }
-.trust-text p { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
+/* ===========================
+   EMAILJS OTP INTEGRATION
+   =========================== */
 
-.otp-card { width: 100%; max-width: 420px; padding: 40px; }
-.role-selector { display: flex; gap: 12px; margin-bottom: 24px; }
-.role-btn {
-  flex: 1; padding: 12px;
-  background: rgba(0,212,255,0.05);
-  border: 1px solid rgba(0,212,255,0.15);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-family: var(--font-display); font-size: 0.65rem; letter-spacing: 1px;
-  cursor: pointer; transition: var(--transition); text-align: center;
-}
-.role-btn.active { border-color: var(--blue-neon); color: var(--blue-neon); background: rgba(0,212,255,0.1); box-shadow: 0 0 15px rgba(0,212,255,0.2); }
-.otp-boxes { display: flex; gap: 10px; justify-content: center; margin: 24px 0; }
-.otp-box {
-  width: 52px; height: 62px;
-  background: rgba(0,212,255,0.05);
-  border: 2px solid rgba(0,212,255,0.2);
-  border-radius: var(--radius-sm);
-  text-align: center; font-family: var(--font-display);
-  font-size: 1.5rem; font-weight: 700; color: var(--blue-neon);
-  transition: var(--transition); caret-color: var(--blue-neon);
-}
-.otp-box:focus { border-color: var(--blue-neon); box-shadow: 0 0 15px rgba(0,212,255,0.3); background: rgba(0,212,255,0.1); }
-.otp-box.filled { border-color: var(--green-neon); box-shadow: 0 0 10px rgba(0,255,136,0.3); }
-.resend-row { text-align: center; margin-top: 16px; font-size: 0.8rem; color: var(--text-muted); }
-.resend-link { color: var(--blue-neon); cursor: pointer; }
-.resend-link.disabled { color: var(--text-muted); cursor: not-allowed; }
-#otp-debug { font-family: var(--font-mono); font-size: 0.7rem; text-align: center; color: var(--text-muted); margin-top: 8px; }
+// 🔴 EMAILJS CONFIG (REPLACE THESE)
+const EMAILJS_CONFIG = {
+    publicKey: "3iKKZU4CFNkC-fK4t",
+    serviceID: "service_o6zj6zw",
+    templateID: "template_78r2kwm"
+};
 
+// OTP CONFIG
+const OTP_CONFIG = {
+    expiry: 60,        // seconds
+    maxAttempts: 3
+};
+
+// OTP STATE
+let otpData = {
+    code: null,
+    email: null,
+    expires: null,
+    attempts: 0,
+    verified: false
+};
+
+let timerInterval;
+
+// INIT EMAILJS
+window.addEventListener("load", () => {
+    if (typeof emailjs !== "undefined") {
+        emailjs.init(EMAILJS_CONFIG.publicKey);
+        console.log("EmailJS Ready");
+    } else {
+        console.log("EmailJS not loaded");
+    }
+});
+
+// GENERATE OTP
+function generateOTP() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+// SEND OTP
+async function sendOTP() {
+    const email = document.getElementById("otp-contact").value;
+
+    if (!email) return alert("Enter email");
+
+    const otp = generateOTP();
+
+    otpData = {
+        code: otp,
+        email: email,
+        expires: Date.now() + OTP_CONFIG.expiry * 1000,
+        attempts: 0,
+        verified: false
+    };
+
+    const btn = document.querySelector(".btn-primary");
+    btn.innerHTML = "SENDING...";
+    btn.disabled = true;
+
+    try {
+        await emailjs.send(
+            EMAILJS_CONFIG.serviceID,
+            EMAILJS_CONFIG.templateID,
+            {
+                to_email: email,
+                to_name: email.split("@")[0],
+                otp_code: otp
+            }
+        );
+
+        alert("OTP sent successfully!");
+
+    } catch (err) {
+        console.log(err);
+
+        // fallback debug (for testing)
+        document.getElementById("otp-debug").innerHTML =
+            `<b>TEST OTP:</b> ${otp}`;
+    }
+
+    btn.innerHTML = "SEND OTP";
+    btn.disabled = false;
+
+    document.getElementById("otp-verify-section").style.display = "block";
+
+    startTimer();
+}
+
+// VERIFY OTP
+function verifyOTP() {
+    let entered = "";
+
+    for (let i = 0; i < 6; i++) {
+        entered += document.getElementById("otp" + i).value;
+    }
+
+    if (Date.now() > otpData.expires) {
+        alert("OTP expired");
+        return;
+    }
+
+    if (entered === otpData.code) {
+        alert("OTP Verified Successfully!");
+        otpData.verified = true;
+
+        setTimeout(() => {
+            console.log("Redirect or next step");
+        }, 1000);
+
+    } else {
+        otpData.attempts++;
+
+        const remaining = OTP_CONFIG.maxAttempts - otpData.attempts;
+
+        alert("Wrong OTP. Attempts left: " + remaining);
+
+        if (remaining <= 0) {
+            alert("Too many attempts. Request new OTP");
+        }
+
+        clearInputs();
+    }
+}
+
+// TIMER
+function startTimer() {
+    let time = OTP_CONFIG.expiry;
+    const timer = document.getElementById("resend-timer");
+
+    clearInterval(timerInterval);
+
+    timerInterval = setInterval(() => {
+        time--;
+        if (timer) timer.innerText = time;
+
+        if (time <= 0) {
+            clearInterval(timerInterval);
+            otpData.code = null;
+            alert("OTP expired");
+        }
+    }, 1000);
+}
+
+// RESEND OTP
+function resendOTP() {
+    sendOTP();
+}
+
+// CLEAR INPUTS
+function clearInputs() {
+    for (let i = 0; i < 6; i++) {
+        document.getElementById("otp" + i).value = "";
+    }
+}
+
+// OTP INPUT HANDLING
+function otpInput(index) {
+    const box = document.getElementById("otp" + index);
+    if (box.value.length === 1 && index < 5) {
+        document.getElementById("otp" + (index + 1)).focus();
+    }
+}
+
+// BACKSPACE SUPPORT
+function otpKeydown(e, index) {
+    if (e.key === "Backspace" && index > 0 && !e.target.value) {
+        document.getElementById("otp" + (index - 1)).focus();
+    }
+}
 /* ============================================================
    PAGE 5: RESUME UPLOAD
    ============================================================ */
